@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-header bg-light">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-people"></i> Сотрудники</h5>
+        <div class="d-flex gap-2">
+          <!-- Поиск -->
+          <div class="position-relative">
+            <input type="text" class="form-control" placeholder="Поиск сотрудников..." name="q" value="{{ search_query }}" hx-get="{% url 'employees:employee_list' %}" hx-trigger="keyup changed delay:500ms" hx-target="#employee-cards" hx-push-url="true" hx-include="[name='department']" />
+            <i class="bi bi-search position-absolute top-50 end-0 translate-middle-y me-3 text-muted"></i>
+          </div>
+
+          <!-- Кнопка добавления -->
+          <button class="btn btn-primary" onclick="openModal('Добавить сотрудника', '{% url 'employees:employee_create' %}')"><i class="bi bi-plus"></i> Добавить</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <!-- Карточки сотрудников -->
+      <div id="employee-cards" hx-trigger="refresh from:body" hx-get="{% url 'employees:employee_list' %}" hx-target="this">
+        {% include 'employees/partials/employee_cards.html' %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
