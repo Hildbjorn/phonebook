@@ -1,0 +1,22 @@
+{% load static %}
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="{% url 'employee_list' %}"><i class="bi bi-telephone me-2"></i>Телефонный справочник</a>
+
+    <div class="collapse navbar-collapse">
+      <div class="navbar-nav ms-auto">
+        <a class="nav-link" href="{% url 'employee_list' %}"><i class="bi bi-people me-1"></i>Сотрудники</a>
+
+        {% if user.is_superuser %}
+          <a class="nav-link" href="{% url 'import' %}"><i class="bi bi-upload me-1"></i>Импорт</a>
+          <a class="nav-link" href="{% url 'import_log' %}"><i class="bi bi-clock-history me-1"></i>История импорта</a>
+        {% endif %}
+
+        {% if user.is_authenticated %}
+          <span class="nav-link">Пользователь: {{ user.username }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>

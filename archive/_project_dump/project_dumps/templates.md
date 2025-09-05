@@ -1,308 +1,181 @@
-# Файл: base.html
+# Файл: layout\base.html
 
 ```
 <!DOCTYPE html>
+
+{% load static %}
+{% load sass_tags %}
+{% load django_bootstrap5 %}
+
 <html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Телефонный справочник</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        :root {
-            --font-family-primary: "Clear Sans", sans-serif;
-            --text-color-primary: #000000;
-            --text-color-main-shade-1: #0000001a;
-            --text-color-secondary: #ffffff;
-            --text-color-tertiary: #6ca795;
-            --text-color-accent: #022456;
-            --text-color-warn: #c90237;
-            --button-color-primary: #022456;
-            --button-color-primaryHover: #2c5694;
-            --button-color-primaryActive: #07172c;
-            --button-color-secondary: #c90237;
-            --button-color-secondaryHover: #e13865;
-            --button-color-secondaryActive: #ab0a35;
-            --button-color-tertiary: #ffffff;
-            --button-color-tertiaryHover: #cecece;
-            --button-color-tertiaryActive: #abafb3;
-            --button-color-quaternary: #dde1e5;
-            --button-color-quaternaryHover: #e6e6e6;
-            --button-color-quaternaryActive: #bfc3c7;
-            --button-color-quaternaryDisabled: #dadada;
-            --button-color-quinary: #000000;
-            --button-color-quinaryHover: #abafb3;
-            --button-color-quinaryActive: #7b8085;
-            --button-color-senary: #000000;
-            --button-color-senaryHover: #022456;
-            --button-color-senaryActive: #07172c;
-            --button-color-primaryDisabled: #abafb3;
-            --background-color-primary: #ffffff;
-            --background-color-secondary: #f3f3f3;
-            --background-color-tertiary: #dde1e5;
-            --background-color-tertiary-hover: #b6bac0;
-            --background-color-warn: #c90237;
-            --background-color-accent: #022456;
-            --placeholder-color-primary: #abafb3;
-            --border-color-primaryHover: #022456;
-            --border-color-primaryFocus: #dde1e5;
-            --border-color-primaryError: #c90237;
-            --border-color-primary: #ffffff;
-            --border-color-secondary: #f3f3f3;
-            --background-color-primaryDisabled: #e6e6e6;
-            --icon-color-primary: #022456;
-            --icon-color-secondary: #dde1e5;
-            --spinner-color-primary: #c90237;
-            --box-shadow-main-menu: 0 24px 48px 0 #c9cad066, 0 1px 4px 0 #c9cad0;
-            --box-shadow-color-1: #e1e5ef99;
-            --background-gradient-accent: linear-gradient(180deg, #022456 -6.51%, #022456 37.56%, #123e7e 71%, #1e60c1 106.81%);
-            --background-gradient-vertical-accent: linear-gradient(83.64deg, #022456 27.84%, #1e60c1 105.37%);
-            --background-gradient-simple-accent: linear-gradient(124.74deg, #022456 -4.85%, #093068 105.49%);
-            --background-gradient-soft-accent: linear-gradient(127.42deg, #022456 38.11%, #144184 89.4%);
-            --box-shadow-card: 0 24px 48px 0 #e3e7ef99, 0 3px 7px 0 #e1e5ef;
-            --box-shadow-tooltip: 0 12px 24px 0 #a9adc566, 0 1px 4px 0 #9dacc1;
-            --separator-color-primary: #abafb3;
-            --separator-color-secondary: #ffffff4d;
-            --background-color-tag-primary: #07172c;
-            --background-color-tag-secondary: #ab0a35;
-            --background-color-tag-tertiary: #dde1e5;
-            --button-toggle-group-color-primary: #7b8085;
-            --button-toggle-group-color-primaryActive: #000000;
-            --box-shadow-autocomplete: 0 24px 48px 0 #e4e6ed66, 0 1px 4px 0 #e4e6ed;
-            --tree-list-pager-color: #dde1e566;
-            --tree-list-border-radius: 12px;
-            --filters-text-font-size: 14px;
-            --filters-font-family: "Clear Sans Medium", sans-serif;
-            --cards-radius-2: 24px
-        }
+  <head>
+    <!-- === БАЗОВЫЕ НАСТРОЙКИ === -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        body {
-            font-family: var(--font-family-primary);
-            color: var(--text-color-primary);
-            background-color: var(--background-color-secondary);
-            padding-bottom: 2rem;
-        }
+    <!-- === ЗАЩИТА И БЕЗОПАСНОСТЬ === -->
+    <meta name="csrfmiddlewaretoken" content="{{ csrf_token }}" />
 
-        .navbar {
-            background: var(--background-gradient-simple-accent) !important;
-            box-shadow: var(--box-shadow-main-menu);
-        }
+    <!-- === СТИЛИ === -->
+    <!-- Основные стили проекта (компилируются из Sass) -->
+    <link href="{% sass_src 'css/style.scss' %}" rel="stylesheet" type="text/css" />
 
-        .navbar-brand {
-            font-weight: 600;
-            font-size: 1.2rem;
-        }
+    <!-- === СКРИПТЫ === -->
+    <!-- HTMX - библиотека для AJAX-запросов и динамического обновления контента -->
+    <script src="{% static 'htmx/htmx.min.js' %}"></script>
 
-        .nav-link {
-            color: var(--text-color-secondary) !important;
-            font-weight: 500;
-            transition: opacity 0.2s;
-        }
+    <!-- Bootstrap JavaScript (включает Popper.js для всплывающих элементов) -->
+    {% bootstrap_javascript %}
 
-        .nav-link:hover {
-            opacity: 0.8;
-        }
+    <!-- jQuery (основная зависимость для многих плагинов) -->
+    <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
 
-        .card {
-            border-radius: var(--cards-radius-2);
-            box-shadow: var(--box-shadow-card);
-            border: none;
-            margin-bottom: 1.5rem;
-            overflow: hidden;
-        }
+    <!-- Основные скрипты проекта (кастомная логика) -->
+    <script type="text/javascript" src="{% static 'js/script.js' %}"></script>
 
-        .department-header {
-            background: var(--background-gradient-soft-accent);
-            color: var(--text-color-secondary);
-            padding: 1.2rem 2rem;
-            margin: 0;
-            font-weight: 600;
-            font-size: 1.3rem;
-            border-radius: var(--cards-radius-2) var(--cards-radius-2) 0 0;
-        }
+    <!-- === Блок стилей отдельных страниц (если будут) === -->
+    {% block extra_css %}
 
-        .employee-card {
-            transition: all 0.3s ease;
-            background: var(--background-color-primary);
-            border: 1px solid var(--border-color-secondary);
-            padding: 0;
-        }
+    {% endblock %}
 
-        .employee-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--box-shadow-tooltip);
-            border-color: var(--border-color-primaryHover);
-        }
+    <!-- === ЗАГОЛОВОК И ФАВИКОНКИ === -->
+    <title>
+      {% block title %}
+        Телефонный справочник
+      {% endblock %}
+    </title>
 
-        .employee-card-content {
-            padding: 1.5rem;
-        }
+    <!-- Фавиконки для всех устройств и браузеров -->
+    {% include 'layout/components/favicons.html' %}
 
-        .employee-name {
-            color: var(--text-color-accent);
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            font-size: 1.2rem;
-        }
+    <!-- === ДОПОЛНИТЕЛЬНЫЕ МЕТА-ТЕГИ === -->
+    {% block meta_tags %}
 
-        .employee-position {
-            color: var(--text-color-primary);
-            margin-bottom: 1.2rem;
-            font-weight: 500;
-        }
+    {% endblock %}
+  </head>
+  <!-- === ТЕЛО СТРАНИЦЫ === -->
+  <body>
+    <!-- Контейнер для всех модальных окон -->
+    {% include 'layout/components/modal.html' %}
 
-        .employee-contact {
-            display: flex;
-            align-items: center;
-            margin-bottom: 0.8rem;
-            color: var(--text-color-primary);
-        }
+    <!-- Шапка сайта (навигация, логотип и т.д.) -->
+    {% include 'layout/components/header.html' %}
 
-        .contact-icon {
-            color: var(--icon-color-primary);
-            margin-right: 0.8rem;
-            width: 20px;
-            font-size: 1.1rem;
-        }
+    <div class="container-fluid mt-4">
+      <!-- ==================== Основной контент ==================== -->
+      {% block content %}
 
-        .hierarchy-badge {
-            background: var(--background-color-tag-tertiary);
-            color: var(--text-color-primary);
-            padding: 0.4rem 1rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .btn-primary {
-            background: var(--background-gradient-simple-accent);
-            border: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background: var(--background-gradient-vertical-accent);
-            transform: translateY(-1px);
-        }
-
-        .btn-outline-primary {
-            color: var(--button-color-primary);
-            border-color: var(--button-color-primary);
-        }
-
-        .btn-outline-primary:hover {
-            background-color: var(--button-color-primary);
-            border-color: var(--button-color-primary);
-        }
-
-        .btn-outline-danger {
-            color: var(--button-color-secondary);
-            border-color: var(--button-color-secondary);
-        }
-
-        .btn-outline-danger:hover {
-            background-color: var(--button-color-secondary);
-            border-color: var(--button-color-secondary);
-        }
-
-        .search-container {
-            position: relative;
-        }
-
-        .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: var(--background-color-primary);
-            border: 1px solid var(--border-color-secondary);
-            border-top: none;
-            max-height: 300px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none;
-            border-radius: 0 0 8px 8px;
-            box-shadow: var(--box-shadow-autocomplete);
-        }
-
-        .search-result-item {
-            padding: 12px;
-            cursor: pointer;
-            border-bottom: 1px solid var(--separator-color-primary);
-            transition: background-color 0.2s;
-        }
-
-        .search-result-item:hover {
-            background-color: var(--background-color-tertiary);
-        }
-
-        .form-control:focus {
-            border-color: var(--border-color-primaryHover);
-            box-shadow: 0 0 0 0.2rem rgba(2, 36, 86, 0.25);
-        }
-
-        .pagination .page-item.active .page-link {
-            background-color: var(--button-color-primary);
-            border-color: var(--button-color-primary);
-        }
-
-        .pagination .page-link {
-            color: var(--text-color-accent);
-        }
-
-        .pagination .page-link:hover {
-            color: var(--button-color-primaryHover);
-        }
-
-        .department-empty {
-            background: var(--background-color-tertiary);
-            color: var(--text-color-primary);
-            padding: 1.2rem 2rem;
-            border-radius: var(--cards-radius-2);
-            text-align: center;
-            font-style: italic;
-        }
-    </style>
-    {% block extra_css %}{% endblock %}
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'employee_list' %}">
-                <i class="bi bi-telephone me-2"></i>Телефонный справочник
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <div class="navbar-nav ms-auto">
-                    <a class="nav-link mx-2" href="{% url 'employee_list' %}">
-                        <i class="bi bi-people me-1"></i>Сотрудники
-                    </a>
-                    <a class="nav-link mx-2" href="{% url 'import' %}">
-                        <i class="bi bi-upload me-1"></i>Импорт
-                    </a>
-                    <a class="nav-link mx-2" href="{% url 'import_log' %}">
-                        <i class="bi bi-clock-history me-1"></i>История импорта
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container mt-4">
-        {% block content %}{% endblock %}
+      {% endblock %}
+      <!-- ========================================================== -->
     </div>
 
-    <script>
-        window.CSRF_TOKEN = "{{ csrf_token }}";
-    </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% block extra_js %}{% endblock %}
-</body>
+    <!-- Кнопка "Наверх" -->
+    {% include 'layout/components/scroll_to_top.html' %}
+  </body>
 </html>
+
+```
+
+
+-----
+
+# Файл: layout\components\favicons.html
+
+```
+{% load static %}
+<!-- ========== FAVICONS И МЕТА-ТЕГИ ДЛЯ РАЗЛИЧНЫХ УСТРОЙСТВ ========== -->
+<!-- Полный набор favicon для всех устройств и браузеров Сгенерировано с помощью https://realfavicongenerator.net -->
+
+<!-- Стандартные favicon -->
+<link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/favicons/apple-touch-icon.png' %}" />
+<link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicons/favicon-32x32.png' %}" />
+<link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicons/favicon-16x16.png' %}" />
+
+<!-- WebApp манифест -->
+<link rel="manifest" href="{% static 'img/favicons/site.webmanifest' %}" />
+
+<!-- Safari pinned tab icon -->
+<link rel="mask-icon" href="{% static 'img/favicons/safari-pinned-tab.svg' %}" color="#00aba9" />
+
+<!-- Короткая иконка -->
+<link rel="shortcut icon" href="{% static 'img/favicons/favicon.ico' %}" />
+
+<!-- Мета-теги для Apple и Windows -->
+<meta name="apple-mobile-web-app-title" content="B-Model" />
+<meta name="application-name" content="B-Model" />
+<meta name="msapplication-TileColor" content="#00aba9" />
+<meta name="msapplication-config" content="{% static 'img/favicons/browserconfig.xml' %}" />
+
+<!-- Цвет темы -->
+<meta name="theme-color" content="#ffffff" />
+
+```
+
+
+-----
+
+# Файл: layout\components\header.html
+
+```
+{% load static %}
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="{% url 'employee_list' %}"><i class="bi bi-telephone me-2"></i>Телефонный справочник</a>
+
+    <div class="collapse navbar-collapse">
+      <div class="navbar-nav ms-auto">
+        <a class="nav-link" href="{% url 'employee_list' %}"><i class="bi bi-people me-1"></i>Сотрудники</a>
+
+        {% if user.is_superuser %}
+          <a class="nav-link" href="{% url 'import' %}"><i class="bi bi-upload me-1"></i>Импорт</a>
+          <a class="nav-link" href="{% url 'import_log' %}"><i class="bi bi-clock-history me-1"></i>История импорта</a>
+        {% endif %}
+
+        {% if user.is_authenticated %}
+          <span class="nav-link">Пользователь: {{ user.username }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>
+
+```
+
+
+-----
+
+# Файл: layout\components\modal.html
+
+```
+{% load static %}
+<!-- ========== УНИВЕРСАЛЬНОЕ МОДАЛЬНОЕ ОКНО ========== -->
+<div class="modal fade" id="modal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="modal" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+    <div class="modal-content" id="modal-content">
+      <!-- Контент будет подгружаться динамически через HTMX -->
+    </div>
+  </div>
+</div>
+
+<!-- ========== БОЛЬШОЕ МОДАЛЬНОЕ ОКНО ДЛЯ ДОКУМЕНТОВ ========== -->
+<div class="modal fade" id="largeModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="largeModal" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+    <div class="modal-content" id="largeModal-content">
+      <!-- Контент будет подгружаться динамически через HTMX -->
+    </div>
+  </div>
+</div>
+
+```
+
+
+-----
+
+# Файл: layout\components\scroll_to_top.html
+
+```
+{% load static %}
+<a href="#" class="btn btn-light rounded-circle scroll-to-top" id="scrollToTop" style="display: none; position: fixed; bottom: 1rem; right: 1rem; width: 40px; height: 40px; z-index: 1000;"><i class="bi bi-arrow-up"></i></a>
 
 ```

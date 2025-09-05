@@ -1,19 +1,25 @@
+from django.shortcuts import render
+
+# Create your views here.
 import pandas as pd
 import re
+import json
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse
-from django.views.generic import ListView
-from django.urls import reverse_lazy
+from django.http import JsonResponse, HttpResponse
+from django.views.generic import ListView, View
 from django.db import transaction, models
-from django.core.paginator import Paginator
+from django.contrib.auth.mixins import UserPassesTestMixin
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-import json
-from django.contrib.auth.decorators import login_required
-from django.utils.decorators import method_decorator
 
 from .models import Employee, ImportLog, Department
 from .forms import EmployeeForm, ImportForm, SearchForm
+
+def is_superuser(user):
+    """Проверка, что пользователь суперпользователь"""
+    return user.is_superuser
 
 def extract_short_name(full_name):
     """Извлекает сокращенное название из скобок"""
@@ -46,6 +52,9 @@ def determine_hierarchy_from_position(position):
         return 8  # Ассистенты по умолчанию
 
 class EmployeeListView(ListView):
+    """
+    Представление для отображения списка сотрудников с фильтрацией
+    """
     model = Employee
     template_name = 'employees/list.html'
     context_object_name = 'employees'
@@ -55,7 +64,6 @@ class EmployeeListView(ListView):
         queryset = super().get_queryset().select_related('department')
         query = self.request.GET.get('query')
         department_id = self.request.GET.get('department')
-        hierarchy = self.request.GET.get('hierarchy')
 
         if query:
             queryset = queryset.filter(
@@ -70,187 +78,107 @@ class EmployeeListView(ListView):
         if department_id:
             try:
                 department = Department.objects.get(id=department_id)
-                # Включаем всех сотрудников выбранного подразделения и его дочерних
-                all_departments = [department] + list(department.get_all_children())
+                all_departments = [department] + department.get_all_children()
                 queryset = queryset.filter(department__in=all_departments)
             except Department.DoesNotExist:
                 pass
 
-        if hierarchy:
-            queryset = queryset.filter(hierarchy=hierarchy)
-
-        return queryset.order_by('department__level', 'department__name', 'hierarchy', 'full_name')
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['search_form'] = SearchForm(self.request.GET or None)
-        context['departments'] = Department.objects.filter(level=1).order_by('name')
-        context['hierarchy_levels'] = Employee.HIERARCHY_LEVELS
-
-        # Группировка по иерархии подразделений
-        employees = context['employees']
-        departments_tree = {}
-
-        for employee in employees:
-            dept = employee.department
-            if not dept:
-                continue
-
-            # Строим полный путь подразделения
-            current = dept
-            path = []
-            while current:
-                path.insert(0, current)
-                current = current.parent
-
-            # Добавляем сотрудника в дерево
-            current_level = departments_tree
-            for i, dept_node in enumerate(path):
-                dept_id = dept_node.id
-                if dept_id not in current_level:
-                    current_level[dept_id] = {
-                        'department': dept_node,
-                        'employees': [],
-                        'children': {}
-                    }
-
-                if i == len(path) - 1:  # Последний уровень - добавляем сотрудника
-                    current_level[dept_id]['employees'].append(employee)
-                else:  # Переходим на следующий уровень
-                    current_level = current_level[dept_id]['children']
-
-        context['departments_tree'] = self._flatten_tree(departments_tree)
+        context['departments_tree'] = self.get_departments_tree()
+        context['is_superuser'] = self.request.user.is_superuser
         return context
 
-    def _flatten_tree(self, tree, level=0):
-        """Преобразует дерево в плоский список для отображения"""
-        result = []
-        for dept_id, data in sorted(tree.items(), key=lambda x: x[1]['department'].name):
-            result.append({
-                'department': data['department'],
-                'employees': sorted(data['employees'], key=lambda x: (x.hierarchy, x.full_name)),
-                'level': level,
-                'children': self._flatten_tree(data['children'], level + 1)
-            })
-        return result
+    def get_departments_tree(self):
+        """Возвращает древовидную структуру подразделений"""
+        top_level_departments = Department.objects.filter(level=1).order_by('id')
+        tree = []
+        
+        for dept in top_level_departments:
+            tree.append(self.build_department_node(dept))
+        
+        return tree
 
-@require_http_methods(["GET"])
-def employee_detail_api(request, pk):
-    try:
-        employee = get_object_or_404(Employee, pk=pk)
-        data = {
-            'id': employee.id,
-            'initials': employee.initials,
-            'full_name': employee.full_name,
-            'position': employee.position,
-            'department': employee.department.id if employee.department else None,
-            'phone': employee.phone,
-            'internal_phone': employee.internal_phone,
-            'email': employee.email,
-            'room': employee.room,
-            'hierarchy': employee.hierarchy,
+    def build_department_node(self, department):
+        """Рекурсивно строит узел подразделения с дочерними элементами"""
+        node = {
+            'department': department,
+            'employees': list(department.employee_set.all().order_by('hierarchy', 'full_name')),
+            'children': []
         }
-        return JsonResponse(data)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        
+        for child in department.children.all().order_by('name'):
+            node['children'].append(self.build_department_node(child))
+            
+        return node
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def employee_create_api(request):
-    try:
-        data = json.loads(request.body)
-        form = EmployeeForm(data)
-        if form.is_valid():
-            employee = form.save()
-            return JsonResponse({'success': True, 'id': employee.id})
-        return JsonResponse({'success': False, 'errors': form.errors})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def employee_update_api(request, pk):
-    try:
-        employee = get_object_or_404(Employee, pk=pk)
-        data = json.loads(request.body)
-        form = EmployeeForm(data, instance=employee)
-        if form.is_valid():
-            employee = form.save()
-            return JsonResponse({'success': True, 'id': employee.id})
-        return JsonResponse({'success': False, 'errors': form.errors})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
-
-@csrf_exempt
-@require_http_methods(["DELETE"])
-def employee_delete_api(request, pk):
-    try:
-        employee = get_object_or_404(Employee, pk=pk)
-        employee.delete()
-        return JsonResponse({'success': True})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
 
 @require_http_methods(["GET"])
 def employee_search_api(request):
+    """
+    API endpoint для поиска сотрудников
+    """
     query = request.GET.get('query', '').strip()
 
     if not query or len(query) < 2:
-        return JsonResponse({'results': []})
+        return HttpResponse('')  # Пустой ответ для HTMX
 
-    try:
-        # Получаем всех сотрудников с подразделениями
-        all_employees = Employee.objects.select_related('department')
+    employees = Employee.objects.select_related('department').filter(
+        models.Q(full_name__icontains=query) |
+        models.Q(position__icontains=query) |
+        models.Q(department__name__icontains=query) |
+        models.Q(phone__icontains=query)
+    )[:15]
 
-        query_lower = query.lower()
-        results = []
+    html = ''.join([
+        f'<div class="search-result-item" hx-get="/api/employees/{emp.id}/" hx-target="#employeeDetails" hx-swap="innerHTML">'
+        f'  <strong>{emp.full_name}</strong> - {emp.position}<br>'
+        f'  <small>{emp.department.name if emp.department else "Без подразделения"} | {emp.phone}</small>'
+        f'</div>'
+        for emp in employees
+    ])
 
-        for emp in all_employees:
-            # Проверяем все текстовые поля на совпадение (регистронезависимо)
-            search_fields = [
-                emp.full_name or '',
-                emp.position or '',
-                emp.department.name if emp.department else '',
-                emp.department.short_name if emp.department and emp.department.short_name else '',
-                emp.phone or '',
-                emp.room or '',
-                emp.internal_phone or '',
-                emp.email or ''
-            ]
+    return HttpResponse(html or '<div class="search-result-item">Ничего не найдено</div>')
 
-            # Проверяем, содержится ли запрос в любом из полей (регистронезависимо)
-            if any(query_lower in (field or '').lower() for field in search_fields):
-                results.append({
-                    'id': emp.id,
-                    'full_name': emp.full_name,
-                    'position': emp.position,
-                    'department': emp.department.name if emp.department else '',
-                    'department_short': emp.department.short_name if emp.department else '',
-                    'phone': emp.phone,
-                    'room': emp.room or '',
-                    'internal_phone': emp.internal_phone or '',
-                    'email': emp.email or '',
-                    'hierarchy': emp.get_hierarchy_display()
-                })
 
-                # Ограничиваем количество результатов для производительности
-                if len(results) >= 20:
-                    break
+@require_http_methods(["GET"])
+def employee_detail_api(request, pk):
+    """
+    API endpoint для получения детальной информации о сотруднике
+    """
+    employee = get_object_or_404(Employee, pk=pk)
+    
+    html = f"""
+    <div class="card">
+        <div class="card-header">
+            <h5>{employee.full_name}</h5>
+            <span class="badge hierarchy-badge-{employee.hierarchy}">
+                {employee.get_hierarchy_display()}
+            </span>
+        </div>
+        <div class="card-body">
+            <p><strong>Должность:</strong> {employee.position}</p>
+            <p><strong>Подразделение:</strong> {employee.department.get_full_path() if employee.department else 'Не указано'}</p>
+            <p><strong>Телефон:</strong> {employee.phone}</p>
+            <p><strong>Внутренний телефон:</strong> {employee.internal_phone}</p>
+            <p><strong>Email:</strong> {employee.email or 'Не указан'}</p>
+            <p><strong>Кабинет:</strong> {employee.room or 'Не указан'}</p>
+        </div>
+    </div>
+    """
+    
+    return HttpResponse(html)
 
-        # Сортируем результаты по релевантности
-        results.sort(key=lambda x: (
-            query_lower not in (x['full_name'] or '').lower(),
-            query_lower not in (x['position'] or '').lower(),
-            x['full_name']
-        ))
-
-        return JsonResponse({'results': results[:15]})
-
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
 
 @method_decorator(login_required, name='dispatch')
-class ImportView(ListView):
+@method_decorator(user_passes_test(is_superuser), name='dispatch')
+class ImportView(View):
+    """
+    Представление для импорта данных из Excel (только для суперпользователей)
+    """
     template_name = 'employees/import.html'
 
     def get(self, request):
@@ -399,9 +327,100 @@ class ImportView(ListView):
             'errors': errors
         }
 
+
+@method_decorator(login_required, name='dispatch')
+@method_decorator(user_passes_test(is_superuser), name='dispatch')
 class ImportLogListView(ListView):
+    """
+    Представление для просмотра логов импорта (только для суперпользователей)
+    """
     model = ImportLog
     template_name = 'employees/import_log.html'
     context_object_name = 'import_logs'
     paginate_by = 20
     ordering = ['-uploaded_at']
+
+
+# CRUD операции для сотрудников (только для суперпользователей)
+
+@require_http_methods(["GET"])
+@login_required
+@user_passes_test(is_superuser)
+def employee_form_api(request, pk=None):
+    """
+    API endpoint для получения HTML формы сотрудника
+    """
+    if pk:
+        employee = get_object_or_404(Employee, pk=pk)
+        form = EmployeeForm(instance=employee)
+        title = "Редактировать сотрудника"
+    else:
+        form = EmployeeForm()
+        title = "Добавить сотрудника"
+    
+    html = f"""
+    <div class="modal-header">
+        <h5 class="modal-title">{title}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <form id="employeeForm" hx-post="{'/api/employees/update/' + str(pk) + '/' if pk else '/api/employees/create/'}" 
+              hx-target="#employeesContent" hx-swap="innerHTML">
+            {form.as_p()}
+        </form>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" form="employeeForm" class="btn btn-primary">Сохранить</button>
+    </div>
+    """
+    
+    return HttpResponse(html)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@login_required
+@user_passes_test(is_superuser)
+def employee_create_api(request):
+    """Создание нового сотрудника"""
+    try:
+        data = json.loads(request.body)
+        form = EmployeeForm(data)
+        if form.is_valid():
+            employee = form.save()
+            return JsonResponse({'success': True, 'id': employee.id})
+        return JsonResponse({'success': False, 'errors': form.errors})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@login_required
+@user_passes_test(is_superuser)
+def employee_update_api(request, pk):
+    """Обновление данных сотрудника"""
+    try:
+        employee = get_object_or_404(Employee, pk=pk)
+        data = json.loads(request.body)
+        form = EmployeeForm(data, instance=employee)
+        if form.is_valid():
+            employee = form.save()
+            return JsonResponse({'success': True, 'id': employee.id})
+        return JsonResponse({'success': False, 'errors': form.errors})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@login_required
+@user_passes_test(is_superuser)
+def employee_delete_api(request, pk):
+    """Удаление сотрудника"""
+    try:
+        employee = get_object_or_404(Employee, pk=pk)
+        employee.delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})

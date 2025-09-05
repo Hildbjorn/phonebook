@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+
+{% load static %}
+{% load sass_tags %}
+{% load django_bootstrap5 %}
+
+<html lang="ru">
+  <head>
+    <!-- === БАЗОВЫЕ НАСТРОЙКИ === -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- === ЗАЩИТА И БЕЗОПАСНОСТЬ === -->
+    <meta name="csrfmiddlewaretoken" content="{{ csrf_token }}" />
+
+    <!-- === СТИЛИ === -->
+    <!-- Основные стили проекта (компилируются из Sass) -->
+    <link href="{% sass_src 'css/style.scss' %}" rel="stylesheet" type="text/css" />
+
+    <!-- === СКРИПТЫ === -->
+    <!-- HTMX - библиотека для AJAX-запросов и динамического обновления контента -->
+    <script src="{% static 'htmx/htmx.min.js' %}"></script>
+
+    <!-- Bootstrap JavaScript (включает Popper.js для всплывающих элементов) -->
+    {% bootstrap_javascript %}
+
+    <!-- jQuery (основная зависимость для многих плагинов) -->
+    <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
+
+    <!-- Основные скрипты проекта (кастомная логика) -->
+    <script type="text/javascript" src="{% static 'js/script.js' %}"></script>
+
+    <!-- === Блок стилей отдельных страниц (если будут) === -->
+    {% block extra_css %}
+
+    {% endblock %}
+
+    <!-- === ЗАГОЛОВОК И ФАВИКОНКИ === -->
+    <title>
+      {% block title %}
+        Телефонный справочник
+      {% endblock %}
+    </title>
+
+    <!-- Фавиконки для всех устройств и браузеров -->
+    {% include 'layout/components/favicons.html' %}
+
+    <!-- === ДОПОЛНИТЕЛЬНЫЕ МЕТА-ТЕГИ === -->
+    {% block meta_tags %}
+
+    {% endblock %}
+  </head>
+  <!-- === ТЕЛО СТРАНИЦЫ === -->
+  <body>
+    <!-- Контейнер для всех модальных окон -->
+    {% include 'layout/components/modal.html' %}
+
+    <!-- Шапка сайта (навигация, логотип и т.д.) -->
+    {% include 'layout/components/header.html' %}
+
+    <div class="container-fluid mt-4">
+      <!-- ==================== Основной контент ==================== -->
+      {% block content %}
+
+      {% endblock %}
+      <!-- ========================================================== -->
+    </div>
+
+    <!-- Кнопка "Наверх" -->
+    {% include 'layout/components/scroll_to_top.html' %}
+  </body>
+</html>

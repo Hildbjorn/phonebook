@@ -2,6 +2,9 @@ from django import forms
 from .models import Employee, Department
 
 class EmployeeForm(forms.ModelForm):
+    """
+    Форма для создания и редактирования сотрудников
+    """
     class Meta:
         model = Employee
         fields = '__all__'
@@ -17,28 +20,36 @@ class EmployeeForm(forms.ModelForm):
             'hierarchy': forms.Select(attrs={'class': 'form-control'}),
         }
 
+
 class ImportForm(forms.Form):
+    """
+    Форма для импорта данных из Excel
+    """
     excel_file = forms.FileField(
         label='Excel файл',
-        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.xlsx'})
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.xlsx',
+            'hx-post': '/import/',
+            'hx-target': '#importResult',
+            'hx-swap': 'innerHTML',
+            'hx-encoding': 'multipart/form-data'
+        })
     )
 
+
 class SearchForm(forms.Form):
+    """
+    Форма для поиска и фильтрации сотрудников
+    """
     query = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': 'Поиск по ФИО, должности, отделам...'
+            'placeholder': 'Поиск по ФИО, должности, отделам...',
+            'hx-get': '/api/employees/search/',
+            'hx-target': '#searchResults',
+            'hx-trigger': 'keyup changed delay:500ms',
+            'hx-swap': 'innerHTML'
         })
-    )
-    department = forms.ModelChoiceField(
-        queryset=Department.objects.filter(level=1),
-        required=False,
-        empty_label="Все подразделения",
-        widget=forms.Select(attrs={'class': 'form-select'})
-    )
-    hierarchy = forms.ChoiceField(
-        choices=[('', 'Все уровни')] + list(Employee.HIERARCHY_LEVELS),
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select'})
     )

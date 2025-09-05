@@ -1,50 +1,17 @@
-<div class="department-level-{{ dept_data.level }} department-card">
-    <h5 class="department-title">
-        <i class="bi bi-building"></i>
-        {{ dept_data.department.name }}
-        {% if dept_data.department.short_name %}
-            <small class="text-muted">({{ dept_data.department.short_name }})</small>
-        {% endif %}
-    </h5>
+<div class="department-node">
+  <div class="department-header level-{{ dept_data.department.level }}" hx-get="?department={{ dept_data.department.id }}" hx-target="#employeesContent" hx-swap="innerHTML">
+    <i class="bi bi-chevron-right"></i>
+    {{ dept_data.department.name }}
+    {% if dept_data.department.short_name %}
+      <small class="text-muted">({{ dept_data.department.short_name }})</small>
+    {% endif %}
+  </div>
 
-    {% if dept_data.employees %}
-    <div class="employees-list">
-        {% for employee in dept_data.employees %}
-        <div class="card employee-card mb-2">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <h6 class="employee-name">{{ employee.full_name }}</h6>
-                        <p class="employee-position mb-1">{{ employee.position }}</p>
-                        <div class="employee-contacts">
-                            {% if employee.phone %}<span class="me-3"><i class="bi bi-telephone"></i> {{ employee.phone }}</span>{% endif %}
-                            {% if employee.internal_phone %}<span class="me-3"><i class="bi bi-telephone-plus"></i> {{ employee.internal_phone }}</span>{% endif %}
-                            {% if employee.email %}<span><i class="bi bi-envelope"></i> {{ employee.email }}</span>{% endif %}
-                        </div>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <span class="badge hierarchy-badge-{{ employee.hierarchy }}">
-                            {{ employee.get_hierarchy_display }}
-                        </span>
-                        <div class="btn-group mt-2">
-                            <button class="btn btn-sm btn-outline-primary edit-btn" data-id="{{ employee.id }}">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger delete-btn" data-id="{{ employee.id }}">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
+  {% if dept_data.children %}
+    <div class="department-children">
+      {% for child_data in dept_data.children %}
+        {% include 'employees/department_node.html' with dept_data=child_data %}
+      {% endfor %}
     </div>
-    {% endif %}
-
-    {% if dept_data.children %}
-        {% for child in dept_data.children %}
-            {% include 'employees/department_node.html' with dept_data=child %}
-        {% endfor %}
-    {% endif %}
+  {% endif %}
 </div>

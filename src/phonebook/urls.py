@@ -1,3 +1,7 @@
+"""
+Настройки маршрутов проекта PhoneBook
+Copyright (c) 2025 Artem Fomin
+"""
 from django.contrib import admin
 from django.urls import path, include
 

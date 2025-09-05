@@ -1,0 +1,124 @@
+{% for dept_data in departments_tree %}
+  <div class="department-section">
+    <!-- Заголовок подразделения -->
+    <div class="department-title">
+      <h4>
+        <i class="bi bi-building"></i>
+        {{ dept_data.department.name }}
+        {% if dept_data.department.short_name %}
+          <small class="text-muted">({{ dept_data.department.short_name }})</small>
+        {% endif %}
+      </h4>
+    </div>
+
+    <!-- Сотрудники текущего подразделения -->
+    {% if dept_data.employees %}
+      <div class="employee-list">
+        {% for employee in dept_data.employees %}
+          <div class="employee-card">
+            <div class="employee-header">
+              <h5 class="employee-name">{{ employee.full_name }}</h5>
+              <span class="hierarchy-badge level-{{ employee.hierarchy }}">{{ employee.get_hierarchy_display }}</span>
+            </div>
+
+            <div class="employee-details">
+              <div>
+                <strong>Должность:</strong> {{ employee.position }}
+              </div>
+              <div>
+                <strong>Телефон:</strong> {{ employee.phone }}
+              </div>
+              {% if employee.internal_phone %}
+                <div>
+                  <strong>Внут.:</strong> {{ employee.internal_phone }}
+                </div>
+              {% endif %}
+              {% if employee.email %}
+                <div>
+                  <strong>Email:</strong> {{ employee.email }}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="employee-actions">
+              <button class="btn btn-sm btn-outline-info" hx-get="/api/employees/{{ employee.id }}/" hx-target="#employeeDetails" data-bs-toggle="modal" data-bs-target="#employeeDetailsModal"><i class="bi bi-info-circle"></i> Подробнее</button>
+
+              {% if is_superuser %}
+                <button class="btn btn-sm btn-outline-primary" hx-get="/api/employees/form/{{ employee.id }}/" hx-target="#modal-content" data-bs-toggle="modal" data-bs-target="#modal"><i class="bi bi-pencil"></i> Редактировать</button>
+
+                <button class="btn btn-sm btn-outline-danger" hx-delete="/api/employees/delete/{{ employee.id }}/" hx-confirm="Вы уверены, что хотите удалить этого сотрудника?" hx-target="#employeesContent" hx-swap="innerHTML"><i class="bi bi-trash"></i> Удалить</button>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> В этом подразделении нет сотрудников
+      </div>
+    {% endif %}
+
+    <!-- Рекурсивный вывод дочерних подразделений -->
+    {% if dept_data.children %}
+      {% for child_data in dept_data.children %}
+        {% include 'employees/employees_list_content.html' with dept_data=child_data %}
+      {% endfor %}
+    {% endif %}
+  </div>
+{% empty %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> Сотрудники не найдены. Попробуйте изменить параметры поиска.
+  </div>
+{% endfor %}
+
+<!-- Пагинация -->
+{% if is_paginated %}
+  <nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+      {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link"
+            href="?page={{ page_obj.previous_page_number }}{% if request.GET.query %}
+              
+              &query={{ request.GET.query }}
+            {% endif %}{% if request.GET.department %}
+              
+              &department={{ request.GET.department }}
+            {% endif %}">
+            <i class="bi bi-chevron-left"></i> Назад
+          </a>
+        </li>
+      {% endif %}
+
+      {% for num in page_obj.paginator.page_range %}
+        <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+          <a class="page-link"
+            href="?page={{ num }}{% if request.GET.query %}
+              
+              &query={{ request.GET.query }}
+            {% endif %}{% if request.GET.department %}
+              
+              &department={{ request.GET.department }}
+            {% endif %}">
+            {{ num }}
+          </a>
+        </li>
+      {% endfor %}
+
+      {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link"
+            href="?page={{ page_obj.next_page_number }}{% if request.GET.query %}
+              
+              &query={{ request.GET.query }}
+            {% endif %}{% if request.GET.department %}
+              
+              &department={{ request.GET.department }}
+            {% endif %}">
+            Вперед <i class="bi bi-chevron-right"></i>
+          </a>
+        </li>
+      {% endif %}
+    </ul>
+  </nav>
+{% endif %}

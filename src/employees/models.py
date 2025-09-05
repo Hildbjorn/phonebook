@@ -2,6 +2,9 @@ from django.db import models
 from django.contrib.auth.models import User
 
 class Department(models.Model):
+    """
+    Модель структурного подразделения с иерархической структурой
+    """
     name = models.CharField(max_length=200, verbose_name="Название")
     short_name = models.CharField(max_length=50, blank=True, verbose_name="Короткое название")
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
@@ -11,7 +14,7 @@ class Department(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['id']
+        ordering = ['level', 'name']
         verbose_name = 'Структурное подразделение'
         verbose_name_plural = 'Структурные подразделения'
 
@@ -19,6 +22,7 @@ class Department(models.Model):
         return self.name
 
     def get_full_path(self):
+        """Возвращает полный путь подразделения в иерархии"""
         parts = []
         current = self
         while current:
@@ -27,14 +31,27 @@ class Department(models.Model):
         return ' → '.join(reversed(parts))
 
     def get_all_children(self):
-        """Возвращает все дочерние подразделения"""
-        children = []
+        """Возвращает все дочерние подразделения рекурсивно"""
+        children = list(self.children.all())
         for child in self.children.all():
-            children.append(child)
             children.extend(child.get_all_children())
         return children
 
+    def get_tree_data(self):
+        """Возвращает данные для древовидного отображения"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'short_name': self.short_name,
+            'level': self.level,
+            'children': [child.get_tree_data() for child in self.children.all().order_by('name')]
+        }
+
+
 class Employee(models.Model):
+    """
+    Модель сотрудника/абонента телефонной книги
+    """
     HIERARCHY_LEVELS = [
         (1, 'Высшее руководство (ГД)'),
         (2, 'Первые заместители'),
@@ -60,7 +77,7 @@ class Employee(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['department', 'hierarchy', 'full_name']
+        ordering = ['department__level', 'department__name', 'hierarchy', 'full_name']
         verbose_name = 'Сотрудник'
         verbose_name_plural = 'Сотрудники'
         unique_together = ['full_name', 'internal_phone']
@@ -68,7 +85,15 @@ class Employee(models.Model):
     def __str__(self):
         return f"{self.full_name} ({self.position})"
 
+    def get_hierarchy_display(self):
+        """Возвращает отображаемое название уровня иерархии"""
+        return dict(self.HIERARCHY_LEVELS).get(self.hierarchy, 'Неизвестно')
+
+
 class ImportLog(models.Model):
+    """
+    Модель для логирования операций импорта данных
+    """
     STATUS_CHOICES = [
         ('success', 'Успешно'),
         ('partial', 'Частично'),
@@ -88,3 +113,7 @@ class ImportLog(models.Model):
         ordering = ['-uploaded_at']
         verbose_name = 'Лог импорта'
         verbose_name_plural = 'Логи импорта'
+
+    def get_status_display(self):
+        """Возвращает отображаемое название статуса"""
+        return dict(self.STATUS_CHOICES).get(self.status, 'Неизвестно')

@@ -1,0 +1,26 @@
+{% load static %}
+<!-- ========== FAVICONS И МЕТА-ТЕГИ ДЛЯ РАЗЛИЧНЫХ УСТРОЙСТВ ========== -->
+<!-- Полный набор favicon для всех устройств и браузеров Сгенерировано с помощью https://realfavicongenerator.net -->
+
+<!-- Стандартные favicon -->
+<link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/favicons/apple-touch-icon.png' %}" />
+<link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicons/favicon-32x32.png' %}" />
+<link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicons/favicon-16x16.png' %}" />
+
+<!-- WebApp манифест -->
+<link rel="manifest" href="{% static 'img/favicons/site.webmanifest' %}" />
+
+<!-- Safari pinned tab icon -->
+<link rel="mask-icon" href="{% static 'img/favicons/safari-pinned-tab.svg' %}" color="#00aba9" />
+
+<!-- Короткая иконка -->
+<link rel="shortcut icon" href="{% static 'img/favicons/favicon.ico' %}" />
+
+<!-- Мета-теги для Apple и Windows -->
+<meta name="apple-mobile-web-app-title" content="B-Model" />
+<meta name="application-name" content="B-Model" />
+<meta name="msapplication-TileColor" content="#00aba9" />
+<meta name="msapplication-config" content="{% static 'img/favicons/browserconfig.xml' %}" />
+
+<!-- Цвет темы -->
+<meta name="theme-color" content="#ffffff" />
