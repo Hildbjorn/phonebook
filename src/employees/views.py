@@ -30,6 +30,13 @@ def extract_short_name(full_name):
         return clean_name, short_name
     return full_name, ''
 
+def get_all_children(self):
+    """Возвращает все дочерние подразделения рекурсивно"""
+    children = list(self.children.all())  # Теперь это будет работать
+    for child in self.children.all():
+        children.extend(child.get_all_children())
+    return children
+
 def determine_hierarchy_from_position(position):
     """Определяет уровень иерархии на основе должности"""
     position_lower = position.lower()
@@ -205,13 +212,12 @@ class ImportView(View):
         df = df.fillna('')
         df = df.replace(['nan', 'None', 'NONE', 'null', 'NULL'], '', regex=True)
 
+        # Проверяем наличие обязательных столбцов
         required_columns = [
             'Инициалы', 'ФИО', 'Должность', 'Структурное подразделение 1',
-            'Структурное подразделение 2', 'Структурное подразделение 3',
-            'Структурное подразделение 4', 'Телефон', 'Внутренний телефон', 'Кабинет', 'Уровень'
+            'Телефон', 'Внутренний телефон'
         ]
-
-        # Проверяем наличие всех required_columns
+        
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             raise ValueError(f"Отсутствуют обязательные столбцы: {', '.join(missing_columns)}")
@@ -384,15 +390,14 @@ def employee_form_api(request, pk=None):
 def employee_create_api(request):
     """Создание нового сотрудника"""
     try:
-        data = json.loads(request.body)
-        form = EmployeeForm(data)
+        # Получаем данные из формы, а не из JSON
+        form = EmployeeForm(request.POST)
         if form.is_valid():
             employee = form.save()
             return JsonResponse({'success': True, 'id': employee.id})
         return JsonResponse({'success': False, 'errors': form.errors})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
-
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -402,8 +407,7 @@ def employee_update_api(request, pk):
     """Обновление данных сотрудника"""
     try:
         employee = get_object_or_404(Employee, pk=pk)
-        data = json.loads(request.body)
-        form = EmployeeForm(data, instance=employee)
+        form = EmployeeForm(request.POST, instance=employee)
         if form.is_valid():
             employee = form.save()
             return JsonResponse({'success': True, 'id': employee.id})

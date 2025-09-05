@@ -8,7 +8,8 @@ class Department(models.Model):
     name = models.CharField(max_length=200, verbose_name="Название")
     short_name = models.CharField(max_length=50, blank=True, verbose_name="Короткое название")
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
-                              verbose_name="Родительское подразделение")
+                              verbose_name="Родительское подразделение", 
+                              related_name='children')
     level = models.IntegerField(default=1, verbose_name="Уровень")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

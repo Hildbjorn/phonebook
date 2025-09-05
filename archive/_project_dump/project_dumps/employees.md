@@ -119,7 +119,7 @@ class EmployeeForm(forms.ModelForm):
             'full_name': forms.TextInput(attrs={'class': 'form-control'}),
             'position': forms.TextInput(attrs={'class': 'form-control'}),
             'department': forms.Select(attrs={'class': 'form-control'}),
-            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control tel'}),
             'internal_phone': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'room': forms.TextInput(attrs={'class': 'form-control'}),
@@ -177,7 +177,8 @@ class Department(models.Model):
     name = models.CharField(max_length=200, verbose_name="Название")
     short_name = models.CharField(max_length=50, blank=True, verbose_name="Короткое название")
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
-                              verbose_name="Родительское подразделение")
+                              verbose_name="Родительское подразделение", 
+                              related_name='children')
     level = models.IntegerField(default=1, verbose_name="Уровень")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -316,6 +317,8 @@ urlpatterns = [
     # API
     path('api/employees/search/', views.employee_search_api, name='employee_search_api'),
     path('api/employees/<int:pk>/', views.employee_detail_api, name='employee_detail_api'),
+    path('api/employees/form/', views.employee_form_api, name='employee_form_create'),
+    path('api/employees/form/<int:pk>/', views.employee_form_api, name='employee_form_update'),
     path('api/employees/create/', views.employee_create_api, name='employee_create_api'),
     path('api/employees/update/<int:pk>/', views.employee_update_api, name='employee_update_api'),
     path('api/employees/delete/<int:pk>/', views.employee_delete_api, name='employee_delete_api'),
@@ -351,6 +354,42 @@ def is_superuser(user):
     """Проверка, что пользователь суперпользователь"""
     return user.is_superuser
 
+def extract_short_name(full_name):
+    """Извлекает сокращенное название из скобок"""
+    match = re.search(r'\((.*?)\)', full_name)
+    if match:
+        short_name = match.group(1)
+        clean_name = re.sub(r'\(.*?\)', '', full_name).strip()
+        return clean_name, short_name
+    return full_name, ''
+
+def get_all_children(self):
+    """Возвращает все дочерние подразделения рекурсивно"""
+    children = list(self.children.all())  # Теперь это будет работать
+    for child in self.children.all():
+        children.extend(child.get_all_children())
+    return children
+
+def determine_hierarchy_from_position(position):
+    """Определяет уровень иерархии на основе должности"""
+    position_lower = position.lower()
+
+    if any(word in position_lower for word in ['генеральный директор', 'гд', 'директор']):
+        return 1
+    elif any(word in position_lower for word in ['первый заместитель', '1-й зам']):
+        return 2
+    elif any(word in position_lower for word in ['заместитель', 'зам', 'вице']):
+        return 3
+    elif any(word in position_lower for word in ['руководитель центра', 'директор департамента', 'начальник департамента']):
+        return 4
+    elif any(word in position_lower for word in ['руководитель управления', 'начальник управления', 'руководитель отделения']):
+        return 5
+    elif any(word in position_lower for word in ['руководитель отдела', 'начальник отдела', 'руководитель службы']):
+        return 6
+    elif any(word in position_lower for word in ['специалист', 'эксперт', 'аналитик']):
+        return 7
+    else:
+        return 8  # Ассистенты по умолчанию
 
 class EmployeeListView(ListView):
     """
@@ -497,9 +536,135 @@ class ImportView(View):
         return JsonResponse({'status': 'failed', 'error': 'Invalid form'})
 
     def process_excel_file(self, file, user):
-        """Обработка Excel файла (реализация аналогичная предыдущей)"""
-        # ... (код обработки Excel из предыдущей реализации)
-        pass
+        try:
+            df = pd.read_excel(file, dtype=str)
+        except Exception as e:
+            raise ValueError(f"Ошибка чтения файла: {str(e)}")
+
+        # Заменяем NaN, None и строки 'nan' на пустые строки
+        df = df.fillna('')
+        df = df.replace(['nan', 'None', 'NONE', 'null', 'NULL'], '', regex=True)
+
+        # Проверяем наличие обязательных столбцов
+        required_columns = [
+            'Инициалы', 'ФИО', 'Должность', 'Структурное подразделение 1',
+            'Телефон', 'Внутренний телефон'
+        ]
+        
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Отсутствуют обязательные столбцы: {', '.join(missing_columns)}")
+
+        added = 0
+        updated = 0
+        errors = []
+
+        with transaction.atomic():
+            for index, row in df.iterrows():
+                try:
+                    # Функция для очистки значений
+                    def clean_value(value, is_level=False):
+                        if value is None or pd.isna(value) or str(value).strip().lower() in ['', 'nan', 'none', 'null']:
+                            return '' if not is_level else 7  # Специалист по умолчанию
+
+                        value_str = str(value).strip()
+
+                        if is_level:
+                            try:
+                                level = int(float(value_str))
+                                return max(1, min(8, level))  # Ограничиваем диапазон 1-8
+                            except (ValueError, TypeError):
+                                return 7  # Специалист по умолчанию
+                        return value_str
+
+                    # Обрабатываем подразделения с извлечением short_name
+                    dept_names = []
+                    for i in range(1, 5):
+                        col_name = f'Структурное подразделение {i}'
+                        dept_name = clean_value(row.get(col_name, ''))
+                        if dept_name:
+                            full_name, short_name = extract_short_name(dept_name)
+                            dept_names.append((full_name, short_name))
+
+                    # Строим иерархию подразделений
+                    parent = None
+                    current_level = 1
+
+                    for full_name, short_name in dept_names:
+                        dept, created = Department.objects.get_or_create(
+                            name=full_name,
+                            parent=parent,
+                            defaults={
+                                'short_name': short_name,
+                                'level': current_level
+                            }
+                        )
+
+                        # Обновляем short_name если он изменился
+                        if not created and short_name and dept.short_name != short_name:
+                            dept.short_name = short_name
+                            dept.save()
+
+                        parent = dept
+                        current_level += 1
+
+                    # Определяем уровень иерархии
+                    position = clean_value(row['Должность'])
+                    hierarchy = clean_value(row['Уровень'], is_level=True)
+
+                    # Если уровень не указан или указан некорректно, определяем по должности
+                    if hierarchy == 7:  # Только если не указан явно или указан как специалист
+                        hierarchy = determine_hierarchy_from_position(position)
+
+                    employee_data = {
+                        'initials': clean_value(row['Инициалы']),
+                        'full_name': clean_value(row['ФИО']),
+                        'position': position,
+                        'department': parent,
+                        'phone': clean_value(row['Телефон']),
+                        'internal_phone': clean_value(row['Внутренний телефон']),
+                        'room': clean_value(row['Кабинет']),
+                        'hierarchy': hierarchy,
+                        'email': clean_value(row.get('Email', ''))
+                    }
+
+                    if not employee_data['full_name']:
+                        errors.append(f"Строка {index + 2}: Отсутствует ФИО")
+                        continue
+
+                    employee, created = Employee.objects.update_or_create(
+                        full_name=employee_data['full_name'],
+                        internal_phone=employee_data['internal_phone'],
+                        defaults=employee_data
+                    )
+
+                    if created:
+                        added += 1
+                    else:
+                        updated += 1
+
+                except Exception as e:
+                    errors.append(f"Строка {index + 2}: {str(e)}")
+
+        status = 'success' if not errors else 'partial' if added + updated > 0 else 'failed'
+
+        ImportLog.objects.create(
+            file_name=file.name,
+            status=status,
+            total_records=len(df),
+            added=added,
+            updated=updated,
+            errors='\n'.join(errors),
+            user=user if user.is_authenticated else None
+        )
+
+        return {
+            'status': status,
+            'total': len(df),
+            'added': added,
+            'updated': updated,
+            'errors': errors
+        }
 
 
 @method_decorator(login_required, name='dispatch')
@@ -516,6 +681,41 @@ class ImportLogListView(ListView):
 
 
 # CRUD операции для сотрудников (только для суперпользователей)
+
+@require_http_methods(["GET"])
+@login_required
+@user_passes_test(is_superuser)
+def employee_form_api(request, pk=None):
+    """
+    API endpoint для получения HTML формы сотрудника
+    """
+    if pk:
+        employee = get_object_or_404(Employee, pk=pk)
+        form = EmployeeForm(instance=employee)
+        title = "Редактировать сотрудника"
+    else:
+        form = EmployeeForm()
+        title = "Добавить сотрудника"
+    
+    html = f"""
+    <div class="modal-header">
+        <h5 class="modal-title">{title}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <form id="employeeForm" hx-post="{'/api/employees/update/' + str(pk) + '/' if pk else '/api/employees/create/'}" 
+              hx-target="#employeesContent" hx-swap="innerHTML">
+            {form.as_p()}
+        </form>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" form="employeeForm" class="btn btn-primary">Сохранить</button>
+    </div>
+    """
+    
+    return HttpResponse(html)
+
 @csrf_exempt
 @require_http_methods(["POST"])
 @login_required
@@ -523,15 +723,14 @@ class ImportLogListView(ListView):
 def employee_create_api(request):
     """Создание нового сотрудника"""
     try:
-        data = json.loads(request.body)
-        form = EmployeeForm(data)
+        # Получаем данные из формы, а не из JSON
+        form = EmployeeForm(request.POST)
         if form.is_valid():
             employee = form.save()
             return JsonResponse({'success': True, 'id': employee.id})
         return JsonResponse({'success': False, 'errors': form.errors})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
-
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -541,8 +740,7 @@ def employee_update_api(request, pk):
     """Обновление данных сотрудника"""
     try:
         employee = get_object_or_404(Employee, pk=pk)
-        data = json.loads(request.body)
-        form = EmployeeForm(data, instance=employee)
+        form = EmployeeForm(request.POST, instance=employee)
         if form.is_valid():
             employee = form.save()
             return JsonResponse({'success': True, 'id': employee.id})
@@ -652,7 +850,7 @@ def employee_delete_api(request, pk):
               <button class="btn btn-sm btn-outline-info" hx-get="/api/employees/{{ employee.id }}/" hx-target="#employeeDetails" data-bs-toggle="modal" data-bs-target="#employeeDetailsModal"><i class="bi bi-info-circle"></i> Подробнее</button>
 
               {% if is_superuser %}
-                <button class="btn btn-sm btn-outline-primary" hx-get="/api/employees/update/{{ employee.id }}/" hx-target="#employeeModalContent" data-bs-toggle="modal" data-bs-target="#employeeModal"><i class="bi bi-pencil"></i> Редактировать</button>
+                <button class="btn btn-sm btn-outline-primary" hx-get="/api/employees/form/{{ employee.id }}/" hx-target="#modal-content" data-bs-toggle="modal" data-bs-target="#modal"><i class="bi bi-pencil"></i> Редактировать</button>
 
                 <button class="btn btn-sm btn-outline-danger" hx-delete="/api/employees/delete/{{ employee.id }}/" hx-confirm="Вы уверены, что хотите удалить этого сотрудника?" hx-target="#employeesContent" hx-swap="innerHTML"><i class="bi bi-trash"></i> Удалить</button>
               {% endif %}
@@ -687,8 +885,10 @@ def employee_delete_api(request, pk):
         <li class="page-item">
           <a class="page-link"
             href="?page={{ page_obj.previous_page_number }}{% if request.GET.query %}
+              
               &query={{ request.GET.query }}
             {% endif %}{% if request.GET.department %}
+              
               &department={{ request.GET.department }}
             {% endif %}">
             <i class="bi bi-chevron-left"></i> Назад
@@ -700,8 +900,10 @@ def employee_delete_api(request, pk):
         <li class="page-item {% if page_obj.number == num %}active{% endif %}">
           <a class="page-link"
             href="?page={{ num }}{% if request.GET.query %}
+              
               &query={{ request.GET.query }}
             {% endif %}{% if request.GET.department %}
+              
               &department={{ request.GET.department }}
             {% endif %}">
             {{ num }}
@@ -713,8 +915,10 @@ def employee_delete_api(request, pk):
         <li class="page-item">
           <a class="page-link"
             href="?page={{ page_obj.next_page_number }}{% if request.GET.query %}
+              
               &query={{ request.GET.query }}
             {% endif %}{% if request.GET.department %}
+              
               &department={{ request.GET.department }}
             {% endif %}">
             Вперед <i class="bi bi-chevron-right"></i>
@@ -724,6 +928,192 @@ def employee_delete_api(request, pk):
     </ul>
   </nav>
 {% endif %}
+
+```
+
+
+-----
+
+# Файл: templates\employees\import.html
+
+```
+{% extends 'layout/base.html' %}
+{% load static %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-md-8 mx-auto">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="card-title">Импорт данных из Excel</h4>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-info">
+            <h5>Требования к файлу:</h5>
+            <ul class="mb-0">
+              <li>Формат: XLSX</li>
+              <li>Столбцы должны быть в следующем порядке:</li>
+              <ol>
+                <li>Инициалы (Иванов И.И.)</li>
+                <li>ФИО (Иванов Иван Иванович)</li>
+                <li>Должность (Специалист)</li>
+                <li>Структурное подразделение 1</li>
+                <li>Структурное подразделение 2</li>
+                <li>Структурное подразделение 3</li>
+                <li>Структурное подразделение 4</li>
+                <li>Телефон</li>
+                <li>Внутренний телефон</li>
+                <li>Уровень иерархии (1-12)</li>
+              </ol>
+            </ul>
+          </div>
+
+          <form id="importForm" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="excel_file" class="form-label">Выберите Excel файл</label>
+              <input type="file" class="form-control" id="excel_file" name="excel_file" accept=".xlsx" required />
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="importBtn"><i class="bi bi-upload"></i> Загрузить файл</button>
+          </form>
+
+          <div id="importResult" class="mt-4" style="display: none;">
+            <div class="alert alert-success" id="successAlert" style="display: none;">
+              <h5>Импорт завершен успешно!</h5>
+              <p id="successMessage"></p>
+            </div>
+
+            <div class="alert alert-warning" id="partialAlert" style="display: none;">
+              <h5>Импорт завершен частично</h5>
+              <p id="partialMessage"></p>
+            </div>
+
+            <div class="alert alert-danger" id="errorAlert" style="display: none;">
+              <h5>Ошибка импорта</h5>
+              <p id="errorMessage"></p>
+            </div>
+
+            <div id="errorDetails" style="display: none;">
+              <h6>Детали ошибок:</h6>
+              <pre id="errorDetailsContent" class="bg-light p-3"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/import.js' %}"></script>
+{% endblock %}
+
+```
+
+
+-----
+
+# Файл: templates\employees\import_log.html
+
+```
+{% extends 'layout/base.html' %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h4 class="card-title mb-0">История импорта</h4>
+          <a href="{% url 'import' %}" class="btn btn-primary btn-sm"><i class="bi bi-arrow-left"></i> Назад к импорту</a>
+        </div>
+        <div class="card-body">
+          {% if import_logs %}
+            <div class="table-responsive">
+              <table class="table table-striped table-hover">
+                <thead>
+                  <tr>
+                    <th>Файл</th>
+                    <th>Дата загрузки</th>
+                    <th>Статус</th>
+                    <th>Всего записей</th>
+                    <th>Добавлено</th>
+                    <th>Обновлено</th>
+                    <th>Пользователь</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for log in import_logs %}
+                    <tr>
+                      <td>{{ log.file_name }}</td>
+                      <td>{{ log.uploaded_at|date:'d.m.Y H:i' }}</td>
+                      <td>
+                        <span class="badge
+                                        {% if log.status == 'success' %}
+                            bg-success
+
+                          {% elif log.status == 'partial' %}
+                            bg-warning
+
+                          {% else %}
+                            bg-danger
+                          {% endif %}">
+                          {{ log.get_status_display }}
+                        </span>
+                      </td>
+                      <td>{{ log.total_records }}</td>
+                      <td>{{ log.added }}</td>
+                      <td>{{ log.updated }}</td>
+                      <td>{{ log.user.username|default:'Система' }}</td>
+                    </tr>
+                    {% if log.errors %}
+                      <tr>
+                        <td colspan="7">
+                          <div class="alert alert-warning mb-0">
+                            <strong>Ошибки:</strong>
+                            <pre class="mb-0">{{ log.errors }}</pre>
+                          </div>
+                        </td>
+                      </tr>
+                    {% endif %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            {% if is_paginated %}
+              <nav aria-label="Page navigation">
+                <ul class="pagination">
+                  {% if page_obj.has_previous %}
+                    <li class="page-item">
+                      <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Предыдущая</a>
+                    </li>
+                  {% endif %}
+
+                  {% for num in page_obj.paginator.page_range %}
+                    <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                      <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                    </li>
+                  {% endfor %}
+
+                  {% if page_obj.has_next %}
+                    <li class="page-item">
+                      <a class="page-link" href="?page={{ page_obj.next_page_number }}">Следующая</a>
+                    </li>
+                  {% endif %}
+                </ul>
+              </nav>
+            {% endif %}
+          {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> История импорта пуста.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
 
 ```
 
@@ -761,16 +1151,16 @@ def employee_delete_api(request, pk):
     </div>
 
     <!-- Правая панель - контент -->
-    <div class="col-md-9">
+    <div class="col-md-7">
       <!-- Поиск -->
       <div class="card search-section">
         <div class="card-body">
           <form method="get" class="row g-2">
-            <div class="col-md-8">
+            <div class="col-8 col-xl-10">
               <label class="form-label">Поиск сотрудников</label>
               {{ search_form.query }}
             </div>
-            <div class="col-md-4 d-flex align-items-end">
+            <div class="col-4 col-xl-2 d-flex align-items-end">
               <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> Найти</button>
             </div>
           </form>
@@ -781,8 +1171,8 @@ def employee_delete_api(request, pk):
 
       <!-- Кнопки действий для суперпользователя -->
       {% if is_superuser %}
-        <div class="superuser-actions">
-          <button class="btn btn-success" hx-get="/api/employees/create/" hx-target="#employeeModalContent" hx-swap="innerHTML" data-bs-toggle="modal" data-bs-target="#employeeModal"><i class="bi bi-plus-circle"></i> Добавить сотрудника</button>
+        <div class="superuser-actions mb-3">
+          <button class="btn btn-success" hx-get="/api/employees/form/" hx-target="#modal-content" hx-swap="innerHTML" data-bs-toggle="modal" data-bs-target="#modal"><i class="bi bi-plus-circle"></i> Добавить сотрудника</button>
           <a href="{% url 'import' %}" class="btn btn-primary"><i class="bi bi-upload"></i> Импорт данных</a>
         </div>
       {% endif %}
@@ -794,17 +1184,7 @@ def employee_delete_api(request, pk):
     </div>
   </div>
 
-  <!-- Модальные окна -->
-  {% include 'employees/confirm_delete_modal.html' %}
-
-  <div class="modal fade" id="employeeModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div id="employeeModalContent"></div>
-      </div>
-    </div>
-  </div>
-
+  <!-- Модальное окно для детальной информации -->
   <div class="modal fade" id="employeeDetailsModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content">
