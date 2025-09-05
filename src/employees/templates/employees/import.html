@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Импорт данных из Excel</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5>Требования к файлу:</h5>
+                    <ul class="mb-0">
+                        <li>Формат: XLSX</li>
+                        <li>Столбцы должны быть в следующем порядке:</li>
+                        <ol>
+                            <li>Инициалы (Иванов И.И.)</li>
+                            <li>ФИО (Иванов Иван Иванович)</li>
+                            <li>Должность (Специалист)</li>
+                            <li>Структурное подразделение 1</li>
+                            <li>Структурное подразделение 2</li>
+                            <li>Структурное подразделение 3</li>
+                            <li>Структурное подразделение 4</li>
+                            <li>Телефон</li>
+                            <li>Внутренний телефон</li>
+                            <li>Уровень иерархии (1-5)</li>
+                        </ol>
+                    </ul>
+                </div>
+
+                <form id="importForm" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="excel_file" class="form-label">Выберите Excel файл</label>
+                        <input type="file" class="form-control" id="excel_file" name="excel_file" accept=".xlsx" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="importBtn">
+                        <i class="bi bi-upload"></i> Загрузить файл
+                    </button>
+                </form>
+
+                <div id="importResult" class="mt-4" style="display: none;">
+                    <div class="alert alert-success" id="successAlert" style="display: none;">
+                        <h5>Импорт завершен успешно!</h5>
+                        <p id="successMessage"></p>
+                    </div>
+
+                    <div class="alert alert-warning" id="partialAlert" style="display: none;">
+                        <h5>Импорт завершен частично</h5>
+                        <p id="partialMessage"></p>
+                    </div>
+
+                    <div class="alert alert-danger" id="errorAlert" style="display: none;">
+                        <h5>Ошибка импорта</h5>
+                        <p id="errorMessage"></p>
+                    </div>
+
+                    <div id="errorDetails" style="display: none;">
+                        <h6>Детали ошибок:</h6>
+                        <pre id="errorDetailsContent" class="bg-light p-3"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+class ImportManager {
+    constructor() {
+        this.form = document.getElementById('importForm');
+        this.importBtn = document.getElementById('importBtn');
+        this.initEventListeners();
+    }
+
+    initEventListeners() {
+        this.form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.importFile();
+        });
+    }
+
+    async importFile() {
+        const formData = new FormData(this.form);
+        const originalBtnText = this.importBtn.innerHTML;
+
+        try {
+            this.importBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Загрузка...';
+            this.importBtn.disabled = true;
+
+            const response = await fetch('{% url "import" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': this.getCSRFToken(),
+                },
+            });
+
+            const result = await response.json();
+            this.showResult(result);
+
+        } catch (error) {
+            this.showResult({
+                status: 'failed',
+                error: 'Ошибка сети: ' + error.message
+            });
+        } finally {
+            this.importBtn.innerHTML = originalBtnText;
+            this.importBtn.disabled = false;
+        }
+    }
+
+    showResult(result) {
+        const resultDiv = document.getElementById('importResult');
+        resultDiv.style.display = 'block';
+
+        // Скрываем все алерты
+        document.getElementById('successAlert').style.display = 'none';
+        document.getElementById('partialAlert').style.display = 'none';
+        document.getElementById('errorAlert').style.display = 'none';
+        document.getElementById('errorDetails').style.display = 'none';
+
+        if (result.status === 'success') {
+            const successAlert = document.getElementById('successAlert');
+            document.getElementById('successMessage').textContent =
+                `Добавлено: ${result.added}, Обновлено: ${result.updated}, Всего записей: ${result.total}`;
+            successAlert.style.display = 'block';
+
+        } else if (result.status === 'partial') {
+            const partialAlert = document.getElementById('partialAlert');
+            document.getElementById('partialMessage').textContent =
+                `Добавлено: ${result.added}, Обновлено: ${result.updated}, Всего записей: ${result.total}.
+                 Ошибок: ${result.errors ? result.errors.length : 0}`;
+            partialAlert.style.display = 'block';
+
+            if (result.errors && result.errors.length > 0) {
+                document.getElementById('errorDetailsContent').textContent = result.errors.join('\n');
+                document.getElementById('errorDetails').style.display = 'block';
+            }
+
+        } else {
+            const errorAlert = document.getElementById('errorAlert');
+            document.getElementById('errorMessage').textContent = result.error || 'Неизвестная ошибка';
+            errorAlert.style.display = 'block';
+
+            if (result.errors && result.errors.length > 0) {
+                document.getElementById('errorDetailsContent').textContent = result.errors.join('\n');
+                document.getElementById('errorDetails').style.display = 'block';
+            }
+        }
+    }
+
+    getCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    }
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', () => {
+    new ImportManager();
+});
+</script>
+{% endblock %}

@@ -1,81 +1,79 @@
 from django.db import models
 from django.contrib.auth.models import User
-from mptt.models import MPTTModel, TreeForeignKey
-from django.utils.translation import gettext_lazy as _
 
-class Department(MPTTModel):
-    name = models.CharField(max_length=200, verbose_name=_("Название"))
-    parent = TreeForeignKey(
-        'self',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='children',
-        verbose_name=_("Родительское подразделение")
-    )
-    description = models.TextField(blank=True, verbose_name=_("Описание"))
+class Department(models.Model):
+    name = models.CharField(max_length=200, verbose_name="Название")
+    short_name = models.CharField(max_length=50, blank=True, verbose_name="Короткое название")
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
+                              verbose_name="Родительское подразделение")
+    level = models.IntegerField(default=1, verbose_name="Уровень")
     created_at = models.DateTimeField(auto_now_add=True)
-    
-    class MPTTMeta:
-        order_insertion_by = ['name']
-    
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        verbose_name = _('Подразделение')
-        verbose_name_plural = _('Подразделения')
-    
+        verbose_name = 'Структурное подразделение'
+        verbose_name_plural = 'Структурные подразделения'
+
     def __str__(self):
         return self.name
 
+    def get_full_path(self):
+        parts = []
+        current = self
+        while current:
+            parts.append(current.name)
+            current = current.parent
+        return ' → '.join(reversed(parts))
+
+    def get_all_children(self):
+        """Возвращает все дочерние подразделения"""
+        children = []
+        for child in self.children.all():
+            children.append(child)
+            children.extend(child.get_all_children())
+        return children
+
 class Employee(models.Model):
     HIERARCHY_LEVELS = [
-        (1, _('Высшее руководство')),
-        (2, _('Руководство')),
-        (3, _('Менеджеры')),
-        (4, _('Специалисты')),
-        (5, _('Ассистенты')),
+        (1, 'Высшее руководство (ГД)'),
+        (2, 'Первые заместители'),
+        (3, 'Заместители'),
+        (4, 'Руководители центров'),
+        (5, 'Руководители управлений'),
+        (6, 'Руководители отделов'),
+        (7, 'Специалисты'),
+        (8, 'Ассистенты'),
     ]
-    
-    # Основная информация
-    initials = models.CharField(max_length=50, verbose_name=_("Инициалы"))
-    full_name = models.CharField(max_length=200, verbose_name=_("ФИО"))
-    position = models.CharField(max_length=200, verbose_name=_("Должность"))
-    
-    # Связь с подразделением
-    department = TreeForeignKey(
-        Department,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        verbose_name=_("Подразделение")
-    )
-    
-    # Контактная информация
-    phone = models.CharField(max_length=20, verbose_name=_("Телефон"))
-    internal_phone = models.CharField(max_length=20, verbose_name=_("Внутренний телефон"))
-    email = models.EmailField(blank=True, verbose_name=_("Email"))
-    room = models.CharField(max_length=50, blank=True, verbose_name=_("Кабинет"))
-    
-    # Системная информация
-    hierarchy = models.IntegerField(choices=HIERARCHY_LEVELS, default=3, verbose_name=_("Уровень иерархии"))
+
+    initials = models.CharField(max_length=50, verbose_name="Инициалы")
+    full_name = models.CharField(max_length=200, verbose_name="ФИО")
+    position = models.CharField(max_length=200, verbose_name="Должность")
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True,
+                                  blank=True, verbose_name="Подразделение")
+    phone = models.CharField(max_length=20, verbose_name="Телефон")
+    internal_phone = models.CharField(max_length=20, verbose_name="Внутренний телефон")
+    email = models.EmailField(blank=True, verbose_name="Email")
+    room = models.CharField(max_length=50, blank=True, verbose_name="Кабинет")
+    hierarchy = models.IntegerField(choices=HIERARCHY_LEVELS, default=7, verbose_name="Уровень иерархии")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        ordering = ['hierarchy', 'full_name']
-        verbose_name = _('Сотрудник')
-        verbose_name_plural = _('Сотрудники')
+        ordering = ['department', 'hierarchy', 'full_name']
+        verbose_name = 'Сотрудник'
+        verbose_name_plural = 'Сотрудники'
         unique_together = ['full_name', 'internal_phone']
-    
+
     def __str__(self):
         return f"{self.full_name} ({self.position})"
 
 class ImportLog(models.Model):
     STATUS_CHOICES = [
-        ('success', _('Успешно')),
-        ('partial', _('Частично')),
-        ('failed', _('Не удалось')),
+        ('success', 'Успешно'),
+        ('partial', 'Частично'),
+        ('failed', 'Не удалось'),
     ]
-    
+
     file_name = models.CharField(max_length=255)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
@@ -84,8 +82,8 @@ class ImportLog(models.Model):
     updated = models.IntegerField()
     errors = models.TextField(blank=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    
+
     class Meta:
         ordering = ['-uploaded_at']
-        verbose_name = _('Лог импорта')
-        verbose_name_plural = _('Логи импорта')
+        verbose_name = 'Лог импорта'
+        verbose_name_plural = 'Логи импорта'

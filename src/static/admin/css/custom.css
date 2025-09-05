@@ -1,0 +1,53 @@
+/* Кастомные стили для админки */
+#header {
+    background: #2c3e50;
+}
+
+.module h2, .module caption, .inline-group h2 {
+    background: #3498db;
+}
+
+div.breadcrumbs {
+    background: #2980b9;
+}
+
+.button, input[type=submit], input[type=button], .submit-row input, a.button {
+    background: #27ae60;
+}
+
+.button:hover, input[type=submit]:hover, input[type=button]:hover {
+    background: #2ecc71;
+}
+
+.object-tools a {
+    background: #e74c3c;
+}
+
+.object-tools a:hover {
+    background: #c0392b;
+}
+
+/* Стили для статистики */
+.stats-box {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.stats-box h3 {
+    margin-top: 0;
+    color: #2c3e50;
+}
+
+/* Иконки для действий */
+.icon-add {
+    background: url('../img/icon-add.svg') no-repeat left center;
+    padding-left: 20px;
+}
+
+.icon-export {
+    background: url('../img/icon-export.svg') no-repeat left center;
+    padding-left: 20px;
+}

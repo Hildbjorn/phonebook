@@ -1,3 +1,6 @@
+# Файл: base.html
+
+```
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -301,3 +304,5 @@
     {% block extra_js %}{% endblock %}
 </body>
 </html>
+
+```

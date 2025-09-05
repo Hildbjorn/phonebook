@@ -1,28 +1,256 @@
 {% extends 'base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    .search-section {
+        background: var(--background-color-primary);
+        border-radius: var(--cards-radius-2);
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--box-shadow-card);
+    }
+
+    .filter-section {
+        background: var(--background-color-primary);
+        border-radius: var(--cards-radius-2);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--box-shadow-card);
+    }
+
+    .department-level-1 { margin-left: 0; border-left: 4px solid var(--background-color-accent); }
+    .department-level-2 { margin-left: 20px; border-left: 3px solid var(--icon-color-primary); }
+    .department-level-3 { margin-left: 40px; border-left: 2px solid var(--text-color-tertiary); }
+    .department-level-4 { margin-left: 60px; border-left: 1px solid var(--separator-color-primary); }
+
+    .department-card {
+        background: var(--background-color-primary);
+        border-radius: var(--cards-radius-2);
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: var(--box-shadow-card);
+    }
+
+    .hierarchy-badge-1 { background: var(--background-color-accent); color: white; }
+    .hierarchy-badge-2 { background: var(--button-color-primaryHover); color: white; }
+    .hierarchy-badge-3 { background: var(--text-color-tertiary); color: white; }
+    .hierarchy-badge-4 { background: var(--button-color-quaternary); color: var(--text-color-primary); }
+    .hierarchy-badge-5 { background: var(--background-color-tertiary); color: var(--text-color-primary); }
+    .hierarchy-badge-6 { background: var(--button-color-quaternaryDisabled); color: var(--text-color-primary); }
+
+    .employee-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .employee-contact-info {
+        border-top: 1px solid var(--separator-color-primary);
+        padding-top: 1rem;
+        margin-top: 1rem;
+    }
+
+    .no-employees {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-color-primary);
+        background: var(--background-color-primary);
+        border-radius: var(--cards-radius-2);
+        box-shadow: var(--box-shadow-card);
+    }
+
+    .no-employees i {
+        font-size: 3rem;
+        color: var(--icon-color-primary);
+        margin-bottom: 1rem;
+    }
+
+    .search-form {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-end;
+    }
+
+    @media (max-width: 768px) {
+        .search-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .employee-card-content .row {
+            flex-direction: column;
+        }
+
+        .employee-actions {
+            justify-content: center;
+            margin-top: 1rem;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-  <div class="card">
-    <div class="card-header bg-light">
-      <div class="d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="bi bi-people"></i> Сотрудники</h5>
-        <div class="d-flex gap-2">
-          <!-- Поиск -->
-          <div class="position-relative">
-            <input type="text" class="form-control" placeholder="Поиск сотрудников..." name="q" value="{{ search_query }}" hx-get="{% url 'employees:employee_list' %}" hx-trigger="keyup changed delay:500ms" hx-target="#employee-cards" hx-push-url="true" hx-include="[name='department']" />
-            <i class="bi bi-search position-absolute top-50 end-0 translate-middle-y me-3 text-muted"></i>
-          </div>
-
-          <!-- Кнопка добавления -->
-          <button class="btn btn-primary" onclick="openModal('Добавить сотрудника', '{% url 'employees:employee_create' %}')"><i class="bi bi-plus"></i> Добавить</button>
+<div class="search-section">
+    <!-- Форма поиска и фильтров -->
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Поиск</label>
+            <input type="text" name="query" class="form-control"
+                   placeholder="ФИО, должность, телефон..." value="{{ request.GET.query }}">
         </div>
-      </div>
-    </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Подразделение</label>
+            {{ search_form.department }}
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Уровень</label>
+            {{ search_form.hierarchy }}
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-search"></i> Применить
+            </button>
+        </div>
+    </form>
+</div>
 
-    <div class="card-body">
-      <!-- Карточки сотрудников -->
-      <div id="employee-cards" hx-trigger="refresh from:body" hx-get="{% url 'employees:employee_list' %}" hx-target="this">
-        {% include 'employees/partials/employee_cards.html' %}
-      </div>
+{% if departments_tree %}
+    {% for dept_data in departments_tree %}
+        {% include 'employees/department_node.html' with dept_data=dept_data %}
+    {% endfor %}
+{% else %}
+    <div class="no-employees">
+        <i class="bi bi-people"></i>
+        <h4>Сотрудники не найдены</h4>
+        <p class="text-muted">Попробуйте изменить параметры поиска</p>
     </div>
-  </div>
+{% endif %}
+
+{% if is_paginated %}
+<nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.query %}&query={{ request.GET.query }}{% endif %}{% if request.GET.department %}&department={{ request.GET.department }}{% endif %}">
+                <i class="bi bi-chevron-left"></i> Предыдущая
+            </a>
+        </li>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+        <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+            <a class="page-link" href="?page={{ num }}{% if request.GET.query %}&query={{ request.GET.query }}{% endif %}{% if request.GET.department %}&department={{ request.GET.department }}{% endif %}">
+                {{ num }}
+            </a>
+        </li>
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.query %}&query={{ request.GET.query }}{% endif %}{% if request.GET.department %}&department={{ request.GET.department }}{% endif %}">
+                Следующая <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Модальные окна -->
+{% include 'employees/confirm_delete_modal.html' %}
+
+<div class="modal fade" id="employeeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Добавить сотрудника</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="employeeForm">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Инициалы</label>
+                                <input type="text" name="initials" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">ФИО *</label>
+                                <input type="text" name="full_name" class="form-control" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Должность *</label>
+                        <input type="text" name="position" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Подразделение</label>
+                        <select name="department" class="form-select">
+                            <option value="">-- Выберите подразделение --</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.id }}">{{ dept.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Телефон *</label>
+                                <input type="text" name="phone" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Внутренний телефон *</label>
+                                <input type="text" name="internal_phone" class="form-control" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Кабинет</label>
+                                <input type="text" name="room" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Уровень иерархии *</label>
+                                <select name="hierarchy" class="form-select" required>
+                                    <option value="1">Высшее руководство</option>
+                                    <option value="2">Руководство</option>
+                                    <option value="3" selected>Менеджеры</option>
+                                    <option value="4">Специалисты</option>
+                                    <option value="5">Ассистенты</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="email" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'employees/js/main.js' %}"></script>
+<script src="{% static 'employees/js/search.js' %}"></script>
 {% endblock %}
