@@ -31,13 +31,17 @@
                       <td>
                         <span class="badge
                                         {% if log.status == 'success' %}
+                            
                             bg-success
 
                           {% elif log.status == 'partial' %}
+                            
                             bg-warning
 
                           {% else %}
+                            
                             bg-danger
+
                           {% endif %}">
                           {{ log.get_status_display }}
                         </span>

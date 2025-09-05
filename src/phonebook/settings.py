@@ -26,7 +26,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # Сторонние приложения
-    'django_htmx',           # HTMX интеграция
     'django_bootstrap5',     # Bootstrap 5
     'sass_processor',        # Компилятор SASS/SCSS
     'widget_tweaks',         # Улучшение виджетов форм
@@ -42,7 +41,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_htmx.middleware.HtmxMiddleware', # HTMX поддержка
 ]
 
 # Корневой конфигуратор URL

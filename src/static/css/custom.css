@@ -1,0 +1,253 @@
+/* Файл: static/css/custom.css */
+/* Дополнительные стили для JavaScript функциональности */
+
+/* Стили для поиска */
+.search-results {
+    position: absolute;
+    z-index: 1000;
+    width: 100%;
+    max-height: 300px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.search-result-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.search-result-item:hover {
+    background-color: #f8f9fa;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+/* Стили для модальных окон */
+.modal-content {
+    border: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+}
+
+.modal-header {
+    border-bottom: 1px solid #dee2e6;
+    padding: 1rem 1.5rem;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    border-top: 1px solid #dee2e6;
+    padding: 1rem 1.5rem;
+}
+
+/* Стили для деталей сотрудника */
+.employee-details-content {
+    padding: 0.5rem;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 0.375rem;
+}
+
+.detail-item strong {
+    color: #495057;
+}
+
+.hierarchy-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background-color: #6c757d;
+    color: white;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+/* Анимации */
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+/* Стили для кнопки "Наверх" */
+.scroll-to-top {
+    transition: all 0.3s ease;
+}
+
+.scroll-to-top:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Стили для уведомлений */
+.alert-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 300px;
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Стили для форм */
+.error-message {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.is-invalid {
+    border-color: #dc3545 !important;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .details-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+
+    .search-results {
+        position: static;
+        max-height: none;
+    }
+
+    .alert-notification {
+        left: 10px;
+        right: 10px;
+        min-width: auto;
+    }
+}
+
+/* Стили для индикаторов загрузки */
+.loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border 0.75s linear infinite;
+}
+
+@keyframes spinner-border {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Стили для древовидной структуры подразделений */
+.department-tree {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.department-node {
+    margin-left: 1rem;
+}
+
+.department-header {
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    cursor: pointer;
+    border-radius: 0.375rem;
+    transition: background-color 0.15s ease;
+}
+
+.department-header:hover {
+    background-color: #e9ecef;
+}
+
+.department-children {
+    margin-left: 1.5rem;
+    border-left: 2px solid #dee2e6;
+}
+
+/* Уровни подразделений */
+.level-0 {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}
+
+.level-1 {
+    background-color: #e3f2fd;
+}
+
+.level-2 {
+    background-color: #e8f5e8;
+}
+
+.level-3 {
+    background-color: #fff3cd;
+}
+
+.level-4 {
+    background-color: #f8d7da;
+}
+
+.level-5 {
+    background-color: #d1ecf1;
+}

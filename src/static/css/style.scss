@@ -10,6 +10,8 @@
 @import "../bootstrap/scss/bootstrap.scss"; // Импортируем основной файл Bootstrap
 // Подключение Bootstrap Icons
 @import "../bootstrap/icons/bootstrap-icons.css";
+// Подключение custom.css
+@import "custom.css";
 
 // Миксины
 @mixin card-shadow {

@@ -1,18 +1,17 @@
-from django.shortcuts import render
-
-# Create your views here.
 import pandas as pd
 import re
 import json
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
-from django.views.generic import ListView, View
+from django.views.generic import ListView, View, TemplateView, CreateView, UpdateView, DeleteView
 from django.db import transaction, models
-from django.contrib.auth.mixins import UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
+from django.urls import reverse_lazy, reverse
+from django.contrib import messages
 
 from .models import Employee, ImportLog, Department
 from .forms import EmployeeForm, ImportForm, SearchForm
@@ -29,13 +28,6 @@ def extract_short_name(full_name):
         clean_name = re.sub(r'\(.*?\)', '', full_name).strip()
         return clean_name, short_name
     return full_name, ''
-
-def get_all_children(self):
-    """Возвращает все дочерние подразделения рекурсивно"""
-    children = list(self.children.all())  # Теперь это будет работать
-    for child in self.children.all():
-        children.extend(child.get_all_children())
-    return children
 
 def determine_hierarchy_from_position(position):
     """Определяет уровень иерархии на основе должности"""
@@ -85,7 +77,7 @@ class EmployeeListView(ListView):
         if department_id:
             try:
                 department = Department.objects.get(id=department_id)
-                all_departments = [department] + department.get_all_children()
+                all_departments = [department] + list(department.get_all_children())
                 queryset = queryset.filter(department__in=all_departments)
             except Department.DoesNotExist:
                 pass
@@ -122,71 +114,64 @@ class EmployeeListView(ListView):
             
         return node
 
-
-@require_http_methods(["GET"])
-def employee_search_api(request):
+class EmployeeSearchAPIView(View):
     """
     API endpoint для поиска сотрудников
     """
-    query = request.GET.get('query', '').strip()
+    def get(self, request):
+        query = request.GET.get('query', '').strip()
 
-    if not query or len(query) < 2:
-        return HttpResponse('')  # Пустой ответ для HTMX
+        if not query or len(query) < 2:
+            return JsonResponse({'results': []})
 
-    employees = Employee.objects.select_related('department').filter(
-        models.Q(full_name__icontains=query) |
-        models.Q(position__icontains=query) |
-        models.Q(department__name__icontains=query) |
-        models.Q(phone__icontains=query)
-    )[:15]
+        employees = Employee.objects.select_related('department').filter(
+            models.Q(full_name__icontains=query) |
+            models.Q(position__icontains=query) |
+            models.Q(department__name__icontains=query) |
+            models.Q(phone__icontains=query)
+        )[:15]
 
-    html = ''.join([
-        f'<div class="search-result-item" hx-get="/api/employees/{emp.id}/" hx-target="#employeeDetails" hx-swap="innerHTML">'
-        f'  <strong>{emp.full_name}</strong> - {emp.position}<br>'
-        f'  <small>{emp.department.name if emp.department else "Без подразделения"} | {emp.phone}</small>'
-        f'</div>'
-        for emp in employees
-    ])
+        results = [
+            {
+                'id': emp.id,
+                'full_name': emp.full_name,
+                'position': emp.position,
+                'department': emp.department.name if emp.department else "Без подразделения",
+                'phone': emp.phone
+            }
+            for emp in employees
+        ]
 
-    return HttpResponse(html or '<div class="search-result-item">Ничего не найдено</div>')
+        return JsonResponse({'results': results})
 
-
-@require_http_methods(["GET"])
-def employee_detail_api(request, pk):
+class EmployeeDetailAPIView(View):
     """
     API endpoint для получения детальной информации о сотруднике
     """
-    employee = get_object_or_404(Employee, pk=pk)
-    
-    html = f"""
-    <div class="card">
-        <div class="card-header">
-            <h5>{employee.full_name}</h5>
-            <span class="badge hierarchy-badge-{employee.hierarchy}">
-                {employee.get_hierarchy_display()}
-            </span>
-        </div>
-        <div class="card-body">
-            <p><strong>Должность:</strong> {employee.position}</p>
-            <p><strong>Подразделение:</strong> {employee.department.get_full_path() if employee.department else 'Не указано'}</p>
-            <p><strong>Телефон:</strong> {employee.phone}</p>
-            <p><strong>Внутренний телефон:</strong> {employee.internal_phone}</p>
-            <p><strong>Email:</strong> {employee.email or 'Не указан'}</p>
-            <p><strong>Кабинет:</strong> {employee.room or 'Не указан'}</p>
-        </div>
-    </div>
-    """
-    
-    return HttpResponse(html)
+    def get(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        
+        data = {
+            'full_name': employee.full_name,
+            'position': employee.position,
+            'department': employee.department.get_full_path() if employee.department else 'Не указано',
+            'phone': employee.phone,
+            'internal_phone': employee.internal_phone,
+            'email': employee.email or 'Не указан',
+            'room': employee.room or 'Не указан',
+            'hierarchy': employee.get_hierarchy_display()
+        }
+        
+        return JsonResponse(data)
 
-
-@method_decorator(login_required, name='dispatch')
-@method_decorator(user_passes_test(is_superuser), name='dispatch')
-class ImportView(View):
+class ImportView(LoginRequiredMixin, UserPassesTestMixin, View):
     """
     Представление для импорта данных из Excel (только для суперпользователей)
     """
     template_name = 'employees/import.html'
+
+    def test_func(self):
+        return self.request.user.is_superuser
 
     def get(self, request):
         form = ImportForm()
@@ -333,10 +318,7 @@ class ImportView(View):
             'errors': errors
         }
 
-
-@method_decorator(login_required, name='dispatch')
-@method_decorator(user_passes_test(is_superuser), name='dispatch')
-class ImportLogListView(ListView):
+class ImportLogListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     """
     Представление для просмотра логов импорта (только для суперпользователей)
     """
@@ -346,85 +328,135 @@ class ImportLogListView(ListView):
     paginate_by = 20
     ordering = ['-uploaded_at']
 
+    def test_func(self):
+        return self.request.user.is_superuser
 
-# CRUD операции для сотрудников (только для суперпользователей)
-
-@require_http_methods(["GET"])
-@login_required
-@user_passes_test(is_superuser)
-def employee_form_api(request, pk=None):
+class EmployeeFormAPIView(LoginRequiredMixin, UserPassesTestMixin, View):
     """
     API endpoint для получения HTML формы сотрудника
     """
-    if pk:
-        employee = get_object_or_404(Employee, pk=pk)
-        form = EmployeeForm(instance=employee)
-        title = "Редактировать сотрудника"
-    else:
-        form = EmployeeForm()
-        title = "Добавить сотрудника"
-    
-    html = f"""
-    <div class="modal-header">
-        <h5 class="modal-title">{title}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-    </div>
-    <div class="modal-body">
-        <form id="employeeForm" hx-post="{'/api/employees/update/' + str(pk) + '/' if pk else '/api/employees/create/'}" 
-              hx-target="#employeesContent" hx-swap="innerHTML">
-            {form.as_p()}
-        </form>
-    </div>
-    <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-        <button type="submit" form="employeeForm" class="btn btn-primary">Сохранить</button>
-    </div>
-    """
-    
-    return HttpResponse(html)
+    def test_func(self):
+        return self.request.user.is_superuser
 
-@csrf_exempt
-@require_http_methods(["POST"])
-@login_required
-@user_passes_test(is_superuser)
-def employee_create_api(request):
+    def get(self, request, pk=None):
+        if pk:
+            employee = get_object_or_404(Employee, pk=pk)
+            form = EmployeeForm(instance=employee)
+            title = "Редактировать сотрудника"
+        else:
+            form = EmployeeForm()
+            title = "Добавить сотрудника"
+        
+        html = f"""
+        <div class="modal-header">
+            <h5 class="modal-title">{title}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <form id="employeeForm" method="post" action="{'/api/employees/update/' + str(pk) + '/' if pk else '/api/employees/create/'}">
+                {form.as_p()}
+                <input type="hidden" name="csrfmiddlewaretoken" value="{request.META['CSRF_COOKIE']}">
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+            <button type="submit" form="employeeForm" class="btn btn-primary">Сохранить</button>
+        </div>
+        """
+        
+        return HttpResponse(html)
+
+class EmployeeCreateAPIView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Создание нового сотрудника"""
-    try:
-        # Получаем данные из формы, а не из JSON
-        form = EmployeeForm(request.POST)
-        if form.is_valid():
-            employee = form.save()
-            return JsonResponse({'success': True, 'id': employee.id})
-        return JsonResponse({'success': False, 'errors': form.errors})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+    
+    def test_func(self):
+        return self.request.user.is_superuser
 
-@csrf_exempt
-@require_http_methods(["POST"])
-@login_required
-@user_passes_test(is_superuser)
-def employee_update_api(request, pk):
+    def post(self, request):
+        try:
+            form = EmployeeForm(request.POST)
+            if form.is_valid():
+                employee = form.save()
+                return JsonResponse({'success': True, 'id': employee.id})
+            return JsonResponse({'success': False, 'errors': form.errors})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+class EmployeeUpdateAPIView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Обновление данных сотрудника"""
-    try:
-        employee = get_object_or_404(Employee, pk=pk)
-        form = EmployeeForm(request.POST, instance=employee)
-        if form.is_valid():
-            employee = form.save()
-            return JsonResponse({'success': True, 'id': employee.id})
-        return JsonResponse({'success': False, 'errors': form.errors})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+    
+    def test_func(self):
+        return self.request.user.is_superuser
 
+    def post(self, request, pk):
+        try:
+            employee = get_object_or_404(Employee, pk=pk)
+            form = EmployeeForm(request.POST, instance=employee)
+            if form.is_valid():
+                employee = form.save()
+                return JsonResponse({'success': True, 'id': employee.id})
+            return JsonResponse({'success': False, 'errors': form.errors})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
 
-@csrf_exempt
-@require_http_methods(["DELETE"])
-@login_required
-@user_passes_test(is_superuser)
-def employee_delete_api(request, pk):
+class EmployeeDeleteAPIView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Удаление сотрудника"""
-    try:
-        employee = get_object_or_404(Employee, pk=pk)
-        employee.delete()
-        return JsonResponse({'success': True})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+    
+    def test_func(self):
+        return self.request.user.is_superuser
+
+    def delete(self, request, pk):
+        try:
+            employee = get_object_or_404(Employee, pk=pk)
+            employee.delete()
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+# Альтернативные классовые представления для CRUD операций
+class EmployeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    """Создание сотрудника через стандартное Django представление"""
+    model = Employee
+    form_class = EmployeeForm
+    template_name = 'employees/employee_form.html'
+    
+    def test_func(self):
+        return self.request.user.is_superuser
+    
+    def get_success_url(self):
+        return reverse('employee_list')
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Сотрудник успешно создан')
+        return super().form_valid(form)
+
+class EmployeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    """Редактирование сотрудника через стандартное Django представление"""
+    model = Employee
+    form_class = EmployeeForm
+    template_name = 'employees/employee_form.html'
+    
+    def test_func(self):
+        return self.request.user.is_superuser
+    
+    def get_success_url(self):
+        return reverse('employee_list')
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Сотрудник успешно обновлен')
+        return super().form_valid(form)
+
+class EmployeeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    """Удаление сотрудника через стандартное Django представление"""
+    model = Employee
+    template_name = 'employees/employee_confirm_delete.html'
+    
+    def test_func(self):
+        return self.request.user.is_superuser
+    
+    def get_success_url(self):
+        return reverse('employee_list')
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Сотрудник успешно удален')
+        return super().delete(request, *args, **kwargs)

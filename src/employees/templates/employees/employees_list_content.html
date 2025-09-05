@@ -41,12 +41,12 @@
             </div>
 
             <div class="employee-actions">
-              <button class="btn btn-sm btn-outline-info" hx-get="/api/employees/{{ employee.id }}/" hx-target="#employeeDetails" data-bs-toggle="modal" data-bs-target="#employeeDetailsModal"><i class="bi bi-info-circle"></i> Подробнее</button>
+              <button class="btn btn-sm btn-outline-info" onclick="showEmployeeDetails({{ employee.id }})" data-bs-toggle="modal" data-bs-target="#employeeDetailsModal"><i class="bi bi-info-circle"></i> Подробнее</button>
 
               {% if is_superuser %}
-                <button class="btn btn-sm btn-outline-primary" hx-get="/api/employees/form/{{ employee.id }}/" hx-target="#modal-content" data-bs-toggle="modal" data-bs-target="#modal"><i class="bi bi-pencil"></i> Редактировать</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadEmployeeForm({{ employee.id }})" data-bs-toggle="modal" data-bs-target="#modal"><i class="bi bi-pencil"></i> Редактировать</button>
 
-                <button class="btn btn-sm btn-outline-danger" hx-delete="/api/employees/delete/{{ employee.id }}/" hx-confirm="Вы уверены, что хотите удалить этого сотрудника?" hx-target="#employeesContent" hx-swap="innerHTML"><i class="bi bi-trash"></i> Удалить</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee({{ employee.id }})"><i class="bi bi-trash"></i> Удалить</button>
               {% endif %}
             </div>
           </div>

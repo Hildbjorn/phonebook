@@ -30,10 +30,6 @@ class ImportForm(forms.Form):
         widget=forms.FileInput(attrs={
             'class': 'form-control',
             'accept': '.xlsx',
-            'hx-post': '/import/',
-            'hx-target': '#importResult',
-            'hx-swap': 'innerHTML',
-            'hx-encoding': 'multipart/form-data'
         })
     )
 
@@ -47,9 +43,6 @@ class SearchForm(forms.Form):
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'Поиск по ФИО, должности, отделам...',
-            'hx-get': '/api/employees/search/',
-            'hx-target': '#searchResults',
-            'hx-trigger': 'keyup changed delay:500ms',
-            'hx-swap': 'innerHTML'
+            'id': 'search-input'
         })
     )

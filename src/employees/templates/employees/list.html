@@ -12,7 +12,7 @@
         <div class="card-body">
           <div class="department-tree">
             <div class="department-node">
-              <div class="department-header level-0" hx-get="?department=" hx-target="#employeesContent" hx-swap="innerHTML">
+              <div class="department-header level-0" onclick="loadDepartmentEmployees('')">
                 <i class="bi bi-building"></i> Все подразделения
               </div>
             </div>
@@ -30,7 +30,7 @@
       <!-- Поиск -->
       <div class="card search-section">
         <div class="card-body">
-          <form method="get" class="row g-2">
+          <form method="get" class="row g-2" id="searchForm">
             <div class="col-8 col-xl-10">
               <label class="form-label">Поиск сотрудников</label>
               {{ search_form.query }}
@@ -47,7 +47,7 @@
       <!-- Кнопки действий для суперпользователя -->
       {% if is_superuser %}
         <div class="superuser-actions mb-3">
-          <button class="btn btn-success" hx-get="/api/employees/form/" hx-target="#modal-content" hx-swap="innerHTML" data-bs-toggle="modal" data-bs-target="#modal"><i class="bi bi-plus-circle"></i> Добавить сотрудника</button>
+          <button class="btn btn-success" onclick="loadEmployeeForm()" data-bs-toggle="modal" data-bs-target="#modal"><i class="bi bi-plus-circle"></i> Добавить сотрудника</button>
           <a href="{% url 'import' %}" class="btn btn-primary"><i class="bi bi-upload"></i> Импорт данных</a>
         </div>
       {% endif %}
@@ -71,4 +71,8 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/employees.js' %}"></script>
 {% endblock %}
