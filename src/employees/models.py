@@ -11,6 +11,7 @@ class Department(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        ordering = ['id']
         verbose_name = 'Структурное подразделение'
         verbose_name_plural = 'Структурные подразделения'
 
